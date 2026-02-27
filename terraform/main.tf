@@ -318,6 +318,18 @@ resource "google_cloud_run_v2_service_iam_member" "scheduler_run_invoker" {
   ]
 }
 
+# IAM: Allow public/unauthenticated access to publisher for testing
+# Remove this in production and use only Cloud Scheduler SA
+resource "google_cloud_run_v2_service_iam_member" "publisher_public_invoke" {
+  project  = var.project_id
+  location = var.region
+  name     = google_cloudfunctions2_function.publisher_function.name
+  role     = "roles/run.invoker"
+  member   = "allUsers"
+
+  depends_on = [google_cloudfunctions2_function.publisher_function]
+}
+
 # Cloud Scheduler Job: Trigger Publisher every 15 minutes
 resource "google_cloud_scheduler_job" "publisher_trigger" {
   name             = "${var.project_id}-publisher-scheduler"

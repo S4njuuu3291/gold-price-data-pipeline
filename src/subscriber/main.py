@@ -16,32 +16,31 @@ def receive_gold_price(request: Any) -> Tuple[Dict[str, Any], int]:
     """
     Cloud Function entry point to receive and process gold price messages from Pub/Sub.
     
-    This function is designed to be triggered by Cloud Pub/Sub in PUSH mode.
-    The subscription pushes messages to this Cloud Function via HTTP POST requests.
+    Supports TWO trigger formats:
     
-    Request format (Pub/Sub push envelope):
-    {
-        "message": {
-            "data": "base64-encoded-message",
-            "messageId": "...",
-            "publishTime": "2026-02-27T12:00:00.000Z",
-            "attributes": {}
-        },
-        "subscription": "projects/.../subscriptions/..."
-    }
+    1. Eventarc CloudEvents (Gen 2, native Pub/Sub):
+       ce_specversion: 1.0
+       ce_type: google.cloud.pubsub.topic.v1.messagePublished
+       ce_source: projects/PROJECT_ID/topics/TOPIC_NAME
+       ce_id, ce_time: metadata
+       Body: JSON with message.data (base64)
+    
+    2. Pub/Sub PUSH envelope (legacy):
+       {
+           "message": {
+               "data": "base64-encoded",
+               "messageId": "...",
+               "publishTime": "...",
+               "attributes": {}
+           },
+           "subscription": "..."
+       }
     
     Args:
         request: Flask request object from Cloud Function environment.
-                 Contains Pub/Sub push message in JSON body.
     
     Returns:
-        Tuple[Dict, int]: (response_dict, status_code)
-            - response_dict: JSON response with status and message
-            - status_code: 200 (ACK message) or 400/500 (NACK message)
-    
-    Important:
-        - Return HTTP 200 to ACK the message (message will NOT be redelivered)
-        - Return any other status to NACK the message (Pub/Sub will retry)
+        Tuple[Dict, int]: (response_dict, status_code) - 200 to ACK
     """
     
     timestamp = datetime.now(timezone.utc).isoformat()
@@ -68,36 +67,56 @@ def receive_gold_price(request: Any) -> Tuple[Dict[str, Any], int]:
                 "timestamp": timestamp
             }, 400
         
-        logger.info(f"Received Pub/Sub push request | MessageID: {request_json.get('message', {}).get('messageId', 'unknown')}")
+        # Detect format: CloudEvents or Pub/Sub push envelope
+        message_id = None
+        message_data_b64 = None
         
-        # Extract Pub/Sub message from envelope
-        if 'message' not in request_json:
-            error_msg = "Invalid Pub/Sub message format - missing 'message' field"
-            logger.error(error_msg)
-            return {
-                "status": "error",
-                "message": error_msg,
-                "timestamp": timestamp
-            }, 400
+        # Check if this is CloudEvents (Eventarc Gen 2)
+        if 'message' in request_json and isinstance(request_json['message'], dict) and 'data' in request_json['message']:
+            # Legacy Pub/Sub PUSH envelope format
+            logger.info("Processing Pub/Sub PUSH envelope format")
+            message = request_json['message']
+            message_id = message.get('messageId', 'unknown')
+            message_data_b64 = message.get('data')
+            
+            if not message_data_b64:
+                error_msg = "Invalid message format - missing 'data' field"
+                logger.error(f"MessageID: {message_id} | {error_msg}")
+                return {
+                    "status": "error",
+                    "message": error_msg,
+                    "timestamp": timestamp
+                }, 400
         
-        message = request_json['message']
+        else:
+            # CloudEvents format (Eventarc)
+            logger.info("Processing CloudEvents format (Eventarc)")
+            
+            # Extract from headers
+            message_id = request.headers.get('ce_id', 'unknown')
+            ce_type = request.headers.get('ce_type', '')
+            
+            # Extract base64 data from CloudEvents body
+            if isinstance(request_json, dict) and 'message' in request_json:
+                message = request_json.get('message', {})
+                message_data_b64 = message.get('data')
+            else:
+                message_data_b64 = None
+            
+            if not message_data_b64:
+                error_msg = "Invalid CloudEvents format - missing message.data"
+                logger.error(f"MessageID: {message_id} | {error_msg}")
+                return {
+                    "status": "error",
+                    "message": error_msg,
+                    "timestamp": timestamp
+                }, 400
         
-        # Extract and validate required fields
-        message_id = message.get('messageId', 'unknown')
-        publish_time = message.get('publishTime', 'unknown')
-        
-        # Decode base64 message data
-        if 'data' not in message:
-            error_msg = "Invalid message format - missing 'data' field"
-            logger.error(f"MessageID: {message_id} | {error_msg}")
-            return {
-                "status": "error",
-                "message": error_msg,
-                "timestamp": timestamp
-            }, 400
-        
+        # Validate and decode base64 data
         try:
-            message_data_b64 = message['data']
+            if not message_data_b64:
+                raise ValueError("No message data to decode")
+                
             message_data_bytes = base64.b64decode(message_data_b64)
             message_data_str = message_data_bytes.decode('utf-8')
             
