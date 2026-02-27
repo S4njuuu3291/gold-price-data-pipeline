@@ -260,7 +260,7 @@ resource "google_cloudfunctions2_function" "subscriber_function" {
     }
 
     service_account_email = google_service_account.gcf-sa.email
-    ingress_settings = "ALLOW_ALL"
+    ingress_settings      = "ALLOW_ALL"
   }
 
   event_trigger {

@@ -46,6 +46,8 @@ build/
 !terraform.tfvars.example
 .terraform.tfstate.lock.info
 .terraform/plugins
+tfplan
+*.tfplan
 
 # GCP / Cloud
 google-cloud-sdk/
