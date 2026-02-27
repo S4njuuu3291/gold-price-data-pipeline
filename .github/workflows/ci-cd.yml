@@ -31,16 +31,43 @@ jobs:
               with:
                   terraform_version: "~> 1.0"
 
+            - name: Check secrets
+              run: |
+                  if [ -z "${{ secrets.GCP_PROJECT_ID }}" ]; then
+                    echo "❌ ERROR: GCP_PROJECT_ID secret is not set!"
+                    echo "Please add GCP_PROJECT_ID to GitHub Secrets"
+                    exit 1
+                  else
+                    echo "✓ GCP_PROJECT_ID secret found"
+                  fi
+                  
+                  if [ -z "${{ secrets.GCP_SA_KEY }}" ]; then
+                    echo "❌ ERROR: GCP_SA_KEY secret is not set!"
+                    echo "Please add GCP_SA_KEY to GitHub Secrets"
+                    exit 1
+                  else
+                    echo "✓ GCP_SA_KEY secret found"
+                  fi
+
             - name: Create terraform.tfvars
               working-directory: terraform
+              env:
+                  PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
               run: |
-                  cat > terraform.tfvars <<EOF
+                  if [ -z "$PROJECT_ID" ]; then
+                    echo "❌ ERROR: PROJECT_ID is empty!"
+                    exit 1
+                  fi
+                  
+                  cat > terraform.tfvars <<'TFEOF'
                   project_id   = "${{ secrets.GCP_PROJECT_ID }}"
                   project_name = "gold-price-alert"
                   region       = "asia-southeast2"
                   environment  = "dev"
-                  EOF
-                  echo "✓ terraform.tfvars created"
+                  TFEOF
+                  
+                  echo "✓ terraform.tfvars created with content:"
+                  cat terraform.tfvars || echo "Failed to read tfvars"
 
             - name: Terraform Format Check
               run: terraform -chdir=terraform fmt -check -recursive
