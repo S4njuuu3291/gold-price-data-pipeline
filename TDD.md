@@ -16,6 +16,12 @@ Selain itu, karena pipeline data sekaligus menyimpan data harga emas, maka siste
 - **Cloud Scheduler**: Untuk menjadwalkan eksekusi Cloud Function setiap waktu yang ditentukan.
 - **Slack API**: Untuk mengirimkan notifikasi ke channel Slack pengguna ketika kondisi alert terpenuhi.
 
+### Cloud Provider: Google Cloud Platform (GCP)
+
+##### Project Name: gold-price-alert
+##### Project ID: gold-price-alert-488703
+##### Region: asia-southeast2 (Jakarta)
+
 ### System Architecture
 
 ![System Architecture](img/system-architecture.png)
