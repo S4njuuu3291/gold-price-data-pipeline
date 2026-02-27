@@ -180,9 +180,9 @@ resource "google_cloudfunctions2_function" "publisher_function" {
   }
 
   service_config {
-    max_instance_count               = 100
+    max_instance_count               = 10
     timeout_seconds                  = 60
-    max_instance_request_concurrency = 100
+    max_instance_request_concurrency = 1
     min_instance_count               = 0
 
     environment_variables = {
@@ -251,9 +251,9 @@ resource "google_cloudfunctions2_function" "subscriber_function" {
   }
 
   service_config {
-    max_instance_count               = 100
+    max_instance_count               = 10
     timeout_seconds                  = 60
-    max_instance_request_concurrency = 100
+    max_instance_request_concurrency = 1
     min_instance_count               = 0
 
     environment_variables = {
