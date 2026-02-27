@@ -25,11 +25,11 @@ resource "google_pubsub_topic" "gold_price_topic" {
 # Google Cloud Function Bucket Source Code
 # ========================================================
 resource "google_storage_bucket" "gcf_source_bucket" {
-    name     = "${var.project_id}-gcf-source"
-    location = var.region
-    force_destroy = true
+  name          = "${var.project_id}-gcf-source"
+  location      = var.region
+  force_destroy = true
 
-    uniform_bucket_level_access = true
+  uniform_bucket_level_access = true
 }
 
 # ========================================================
