@@ -19,7 +19,8 @@ resource "google_project_service" "required_apis" {
     "iam.googleapis.com",
     "artifactregistry.googleapis.com",
     "eventarc.googleapis.com",
-    "run.googleapis.com"
+    "run.googleapis.com",
+    "cloudbuild.googleapis.com"
   ])
 
   project = var.project_id
