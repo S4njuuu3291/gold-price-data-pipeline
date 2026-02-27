@@ -34,13 +34,13 @@ jobs:
             - name: Create terraform.tfvars
               working-directory: terraform
               run: |
-                cat > terraform.tfvars <<EOF
-                project_id   = "${{ secrets.GCP_PROJECT_ID }}"
-                project_name = "gold-price-alert"
-                region       = "asia-southeast2"
-                environment  = "dev"
-                EOF
-                echo "✓ terraform.tfvars created"
+                  cat > terraform.tfvars <<EOF
+                  project_id   = "${{ secrets.GCP_PROJECT_ID }}"
+                  project_name = "gold-price-alert"
+                  region       = "asia-southeast2"
+                  environment  = "dev"
+                  EOF
+                  echo "✓ terraform.tfvars created"
 
             - name: Terraform Format Check
               run: terraform -chdir=terraform fmt -check -recursive
