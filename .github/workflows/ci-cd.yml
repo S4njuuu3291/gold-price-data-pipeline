@@ -2,10 +2,7 @@ name: CI/CD Pipeline for Gold Price Data Pipeline
 
 on:
     push:
-        branches: [dev]
-        paths:
-            - setup/**
-            - features/**
+        branches: [dev, "setup/**", "feature/**"]
     pull_request:
         branches:
             - main
