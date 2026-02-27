@@ -138,6 +138,7 @@ resource "google_cloudfunctions_function" "publisher_function" {
   runtime             = "python313"
   available_memory_mb = 512
   timeout             = 60
+  trigger_http        = true
 
   source_archive_bucket = google_storage_bucket.gcf_source_bucket.name
   source_archive_object = google_storage_bucket_object.publisher_source.name
@@ -195,6 +196,7 @@ resource "google_cloudfunctions_function" "subscriber_function" {
   runtime             = "python313"
   available_memory_mb = 512
   timeout             = 60
+  trigger_http        = true
 
   source_archive_bucket = google_storage_bucket.gcf_source_bucket.name
   source_archive_object = google_storage_bucket_object.subscriber_source.name
