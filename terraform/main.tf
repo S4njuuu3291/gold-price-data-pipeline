@@ -16,7 +16,10 @@ resource "google_project_service" "required_apis" {
     "pubsub.googleapis.com",
     "storage.googleapis.com",
     "secretmanager.googleapis.com",
-    "iam.googleapis.com"
+    "iam.googleapis.com",
+    "artifactregistry.googleapis.com",
+    "eventarc.googleapis.com",
+    "run.googleapis.com"
   ])
 
   project = var.project_id
@@ -48,10 +51,12 @@ resource "google_pubsub_topic" "gold_price_topic" {
     environment = var.environment
     project     = var.project_name
   }
+
+  depends_on = [google_project_service.required_apis]
 }
 
 # ========================================================
-# Google Cloud Function Bucket Source Code
+# Google Cloud Function Bucket Source Code (Gen 2)
 # ========================================================
 resource "google_storage_bucket" "gcf_source_bucket" {
   name          = "${var.project_id}-gcf-source"
@@ -59,16 +64,30 @@ resource "google_storage_bucket" "gcf_source_bucket" {
   force_destroy = true
 
   uniform_bucket_level_access = true
+
+  depends_on = [google_project_service.required_apis]
 }
 
 # ========================================================
-# Cloud Function to fetch gold price and publish to Pub/Sub
+# Artifact Registry Repository for Cloud Functions Gen 2
+# ========================================================
+resource "google_artifact_registry_repository" "cloud_functions_repo" {
+  location      = var.region
+  repository_id = "cloud-functions"
+  description   = "Docker repository for Cloud Functions Gen 2"
+  format        = "DOCKER"
+
+  depends_on = [google_project_service.required_apis]
+}
+
+# ========================================================
+# Service Accounts and IAM Roles
 # ========================================================
 
-# Service Account untuk Cloud Function
+# Service Account for Cloud Functions
 resource "google_service_account" "gcf-sa" {
   account_id   = "${var.project_id}-gcf-sa"
-  display_name = "Service Account for Cloud Function"
+  display_name = "Service Account for Cloud Functions Gen 2"
 }
 
 # IAM: Grant Read/Write access to the bucket for the service account
@@ -78,7 +97,7 @@ resource "google_storage_bucket_iam_member" "bucket_access" {
   member = "serviceAccount:${google_service_account.gcf-sa.email}"
 }
 
-# IAM: Grant Secret manager access to the service account
+# IAM: Grant Secret Manager access to the service account
 resource "google_project_iam_member" "gcf_secret_access" {
   project = var.project_id
   role    = "roles/secretmanager.secretAccessor"
@@ -108,8 +127,17 @@ resource "google_project_iam_member" "gcf_logging_writer" {
   depends_on = [google_service_account.gcf-sa]
 }
 
+# IAM: Grant Eventarc Event Receiver role for Pub/Sub triggers
+resource "google_project_iam_member" "gcf_eventarc_receiver" {
+  project = var.project_id
+  role    = "roles/eventarc.eventReceiver"
+  member  = "serviceAccount:${google_service_account.gcf-sa.email}"
+
+  depends_on = [google_service_account.gcf-sa]
+}
+
 # ========================================================
-# Cloud Function: Publisher (Fetch and Publish Gold Price)
+# Cloud Function Gen 2: Publisher (HTTP Trigger)
 # ========================================================
 
 # Create ZIP archive for publisher source code
@@ -118,9 +146,7 @@ data "archive_file" "publisher_source" {
   output_path = "/tmp/publisher-source.zip"
   source_dir  = "${path.module}/../src/publisher"
 
-  depends_on = [
-    google_project_service.required_apis
-  ]
+  depends_on = [google_project_service.required_apis]
 }
 
 # Upload publisher source code to GCS
@@ -132,32 +158,47 @@ resource "google_storage_bucket_object" "publisher_source" {
   depends_on = [data.archive_file.publisher_source]
 }
 
-# Deploy Publisher Cloud Function
-resource "google_cloudfunctions_function" "publisher_function" {
-  name                = "${var.project_id}-publisher"
-  runtime             = "python313"
-  available_memory_mb = 512
-  timeout             = 60
-  trigger_http        = true
+# Deploy Publisher Cloud Function Gen 2
+resource "google_cloudfunctions2_function" "publisher_function" {
+  name        = "${var.project_id}-publisher"
+  location    = var.region
+  description = "Gold price publisher function - triggered by Cloud Scheduler"
 
-  source_archive_bucket = google_storage_bucket.gcf_source_bucket.name
-  source_archive_object = google_storage_bucket_object.publisher_source.name
+  build_config {
+    runtime     = "python313"
+    entry_point = "publish_gold_price"
+    
+    source {
+      storage_source {
+        bucket = google_storage_bucket.gcf_source_bucket.name
+        object = google_storage_bucket_object.publisher_source.name
+      }
+    }
 
-  entry_point = "publish_gold_price"
-
-  environment_variables = {
-    PROJECT_ID = var.project_id
-    TOPIC_ID   = google_pubsub_topic.gold_price_topic.name
+    docker_repository = "projects/${var.project_id}/locations/${var.region}/repositories/cloud-functions"
   }
 
-  service_account_email = google_service_account.gcf-sa.email
-
-  ingress_settings = "ALLOW_ALL"
+  service_config {
+    max_instance_count              = 100
+    timeout_seconds                 = 60
+    max_instance_request_concurrency = 100
+    min_instance_count              = 0
+    
+    environment_variables = {
+      PROJECT_ID = var.project_id
+      TOPIC_ID   = google_pubsub_topic.gold_price_topic.name
+    }
+    
+    service_account_email = google_service_account.gcf-sa.email
+    ingress_settings      = "ALLOW_ALL"
+  }
 
   depends_on = [
     google_storage_bucket_object.publisher_source,
     google_project_iam_member.gcf_pubsub_publisher,
-    google_project_iam_member.gcf_logging_writer
+    google_project_iam_member.gcf_logging_writer,
+    google_artifact_registry_repository.cloud_functions_repo,
+    google_project_service.required_apis
   ]
 
   labels = {
@@ -167,7 +208,7 @@ resource "google_cloudfunctions_function" "publisher_function" {
 }
 
 # ========================================================
-# Cloud Function: Subscriber (Receive and Process Messages)
+# Cloud Function Gen 2: Subscriber (Pub/Sub Trigger via Eventarc)
 # ========================================================
 
 # Create ZIP archive for subscriber source code
@@ -176,9 +217,7 @@ data "archive_file" "subscriber_source" {
   output_path = "/tmp/subscriber-source.zip"
   source_dir  = "${path.module}/../src/subscriber"
 
-  depends_on = [
-    google_project_service.required_apis
-  ]
+  depends_on = [google_project_service.required_apis]
 }
 
 # Upload subscriber source code to GCS
@@ -190,30 +229,53 @@ resource "google_storage_bucket_object" "subscriber_source" {
   depends_on = [data.archive_file.subscriber_source]
 }
 
-# Deploy Subscriber Cloud Function
-resource "google_cloudfunctions_function" "subscriber_function" {
-  name                = "${var.project_id}-subscriber"
-  runtime             = "python313"
-  available_memory_mb = 512
-  timeout             = 60
-  trigger_http        = true
+# Deploy Subscriber Cloud Function Gen 2 with Pub/Sub Eventarc Trigger
+resource "google_cloudfunctions2_function" "subscriber_function" {
+  name        = "${var.project_id}-subscriber"
+  location    = var.region
+  description = "Gold price subscriber function - triggered by Pub/Sub via Eventarc"
 
-  source_archive_bucket = google_storage_bucket.gcf_source_bucket.name
-  source_archive_object = google_storage_bucket_object.subscriber_source.name
+  build_config {
+    runtime     = "python313"
+    entry_point = "receive_gold_price"
+    
+    source {
+      storage_source {
+        bucket = google_storage_bucket.gcf_source_bucket.name
+        object = google_storage_bucket_object.subscriber_source.name
+      }
+    }
 
-  entry_point = "receive_gold_price"
-
-  environment_variables = {
-    PROJECT_ID = var.project_id
+    docker_repository = "projects/${var.project_id}/locations/${var.region}/repositories/cloud-functions"
   }
 
-  service_account_email = google_service_account.gcf-sa.email
+  service_config {
+    max_instance_count              = 100
+    timeout_seconds                 = 60
+    max_instance_request_concurrency = 100
+    min_instance_count              = 0
+    
+    environment_variables = {
+      PROJECT_ID = var.project_id
+    }
+    
+    service_account_email = google_service_account.gcf-sa.email
+    ingress_settings      = "ALLOW_INTERNAL_AND_GCLOUD"
+  }
 
-  ingress_settings = "ALLOW_ALL"
+  event_trigger {
+    trigger_region        = var.region
+    event_type            = "google.cloud.pubsub.topic.v1.messagePublished"
+    pubsub_topic          = google_pubsub_topic.gold_price_topic.id
+    service_account_email = google_service_account.gcf-sa.email
+  }
 
   depends_on = [
     google_storage_bucket_object.subscriber_source,
-    google_project_iam_member.gcf_logging_writer
+    google_project_iam_member.gcf_logging_writer,
+    google_project_iam_member.gcf_eventarc_receiver,
+    google_artifact_registry_repository.cloud_functions_repo,
+    google_project_service.required_apis
   ]
 
   labels = {
@@ -232,7 +294,7 @@ resource "google_service_account" "scheduler_sa" {
   display_name = "Service Account for Cloud Scheduler"
 }
 
-# IAM: Grant Cloud Scheduler to invoke Cloud Functions
+# IAM: Grant Cloud Functions Invoker role to Cloud Scheduler
 resource "google_project_iam_member" "scheduler_invoke_cf" {
   project = var.project_id
   role    = "roles/cloudfunctions.invoker"
@@ -248,10 +310,11 @@ resource "google_cloud_scheduler_job" "publisher_trigger" {
   schedule         = "*/15 * * * *" # Every 15 minutes
   time_zone        = "Asia/Jakarta"
   attempt_deadline = "320s"
+  region           = var.region
 
   http_target {
     http_method = "POST"
-    uri         = google_cloudfunctions_function.publisher_function.https_trigger_url
+    uri         = google_cloudfunctions2_function.publisher_function.service_config[0].uri
 
     oidc_token {
       service_account_email = google_service_account.scheduler_sa.email
@@ -259,29 +322,23 @@ resource "google_cloud_scheduler_job" "publisher_trigger" {
   }
 
   depends_on = [
-    google_cloudfunctions_function.publisher_function,
+    google_cloudfunctions2_function.publisher_function,
     google_project_iam_member.scheduler_invoke_cf
   ]
 }
 
 # ========================================================
-# Pub/Sub Subscription: Push mode to Subscriber Cloud Function
+# Pub/Sub Subscription for DLQ and Manual Monitoring
 # ========================================================
 
-# Pub/Sub Push Subscription
+# Note: For Gen 2 Subscriber, the Eventarc trigger handles message delivery natively
+# This subscription is optional for:
+# - Dead Letter Queue (DLQ) policy
+# - Manual message inspection
+# - Monitoring and debugging
 resource "google_pubsub_subscription" "gold_price_subscription" {
   name  = "${var.project_id}-subscription"
   topic = google_pubsub_topic.gold_price_topic.name
-
-  # Push configuration - delivers messages via HTTP POST to the subscriber function
-  push_config {
-    push_endpoint = google_cloudfunctions_function.subscriber_function.https_trigger_url
-
-    # Authenticate the push request with OIDC token
-    oidc_token {
-      service_account_email = google_service_account.gcf-sa.email
-    }
-  }
 
   # Message acknowledgement settings
   ack_deadline_seconds = 60
@@ -292,17 +349,18 @@ resource "google_pubsub_subscription" "gold_price_subscription" {
     max_delivery_attempts = 5
   }
 
-  # Message retention
-  message_retention_duration = "86400s" # 24 hours
+  # Message retention - 24 hours
+  message_retention_duration = "86400s"
 
   depends_on = [
-    google_cloudfunctions_function.subscriber_function,
-    google_pubsub_topic.gold_price_dlq_topic
+    google_pubsub_topic.gold_price_dlq_topic,
+    google_project_service.required_apis
   ]
 
   labels = {
     environment = var.environment
     project     = var.project_name
+    type        = "dlq-subscription"
   }
 }
 
@@ -317,4 +375,6 @@ resource "google_pubsub_topic" "gold_price_dlq_topic" {
     project     = var.project_name
     purpose     = "dead-letter-queue"
   }
+
+  depends_on = [google_project_service.required_apis]
 }
