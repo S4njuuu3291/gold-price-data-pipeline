@@ -55,5 +55,4 @@ jobs:
               run: terraform -chdir=terraform plan -out=tfplan
 
             - name: Terraform Apply
-              if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
               run: terraform -chdir=terraform apply -auto-approve tfplan
