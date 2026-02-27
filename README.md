@@ -127,14 +127,6 @@ The script includes error handling for:
 - Failed Slack webhook notifications
 - Missing or invalid environment variables
 
-## Future Enhancements
-
-- Add database storage for historical gold price data
-- Implement scheduled execution (cron jobs)
-- Add more notification channels (Email, Discord, etc.)
-- Create a web dashboard to visualize price trends
-- Implement price alert thresholds
-
 ## Author
 
 **S4njuuu3291** - sanju329121@gmail.com
