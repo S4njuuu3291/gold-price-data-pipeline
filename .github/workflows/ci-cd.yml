@@ -31,6 +31,17 @@ jobs:
               with:
                   terraform_version: "~> 1.0"
 
+            - name: Create terraform.tfvars
+              working-directory: terraform
+              run: |
+                  cat > terraform.tfvars <<'TFEOF'
+                  project_id   = "gold-price-alert-488703"
+                  project_name = "gold-price-alert"
+                  region       = "asia-southeast2"
+                  environment  = "dev"
+                  TFEOF
+                  echo "✓ terraform.tfvars created"
+
             - name: Terraform Format Check
               run: terraform -chdir=terraform fmt -check -recursive
 
