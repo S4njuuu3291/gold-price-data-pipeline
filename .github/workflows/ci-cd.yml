@@ -25,7 +25,7 @@ jobs:
         runs-on: ubuntu-latest
         steps:
             - name: Checkout Repository
-              uses: actions/checkout@v3
+              uses: actions/checkout@v4
 
             - name: Set up Python
               uses: actions/setup-python@v4
@@ -40,7 +40,7 @@ jobs:
                   virtualenvs-in-project: true
 
             - name: Cache Poetry dependencies
-              uses: actions/cache@v3
+              uses: actions/cache@v4
               with:
                   path: .venv
                   key: venv-${{ runner.os }}-${{ hashFiles('**/poetry.lock') }}
@@ -55,7 +55,7 @@ jobs:
 
             - name: Upload Test Results
               if: always()
-              uses: actions/upload-artifact@v3
+              uses: actions/upload-artifact@v4
               with:
                   name: test-results
                   path: test-results.xml
@@ -120,7 +120,7 @@ jobs:
               run: terraform plan -out=tfplan
 
             - name: Upload Terraform Plan
-              uses: actions/upload-artifact@v3
+              uses: actions/upload-artifact@v4
               with:
                   name: terraform-plan
                   path: terraform/tfplan
