@@ -5,6 +5,26 @@ terraform {
   }
 }
 
+# ========================================================
+# Enable Required APIs
+# ========================================================
+resource "google_project_service" "required_apis" {
+  for_each = toset([
+    "cloudresourcemanager.googleapis.com",
+    "cloudfunctions.googleapis.com",
+    "cloudscheduler.googleapis.com",
+    "pubsub.googleapis.com",
+    "storage.googleapis.com",
+    "secretmanager.googleapis.com",
+    "iam.googleapis.com"
+  ])
+
+  project = var.project_id
+  service = each.value
+
+  disable_on_destroy = false
+}
+
 provider "google" {
   project = var.project_id
   region  = var.region
@@ -17,6 +37,8 @@ resource "google_storage_bucket" "gold_price_bucket" {
   force_destroy = true
 
   uniform_bucket_level_access = true
+
+  depends_on = [google_project_service.required_apis]
 }
 
 resource "google_pubsub_topic" "gold_price_topic" {
@@ -62,5 +84,8 @@ resource "google_project_iam_member" "gcf_secret_access" {
   role    = "roles/secretmanager.secretAccessor"
   member  = "serviceAccount:${google_service_account.gcf-sa.email}"
 
-  depends_on = [google_service_account.gcf-sa]
+  depends_on = [
+    google_service_account.gcf-sa,
+    google_project_service.required_apis
+  ]
 }
