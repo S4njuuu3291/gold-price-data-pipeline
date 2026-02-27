@@ -1,0 +1,59 @@
+name: CI/CD Pipeline for Gold Price Data Pipeline
+
+on:
+    push:
+        branches: [dev, "setup/**", "feature/**"]
+    pull_request:
+        branches:
+            - main
+    workflow_dispatch:
+
+jobs:
+    terraform_infra:
+        name: Terraform Infrastructure Deployment
+        runs-on: ubuntu-latest
+        environment: dev
+        steps:
+            - name: Checkout Repository
+              uses: actions/checkout@v3
+
+            - id: "auth"
+              name: "Authenticate to Google Cloud"
+              uses: "google-github-actions/auth@v2"
+              with:
+                  credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+            - name: Set up Cloud SDK
+              uses: google-github-actions/setup-gcloud@v2
+
+            - name: Set up Terraform
+              uses: hashicorp/setup-terraform@v3
+              with:
+                  terraform_version: "~> 1.0"
+
+            - name: Create terraform.tfvars
+              working-directory: terraform
+              run: |
+                  cat > terraform.tfvars <<'TFEOF'
+                  project_id   = "gold-price-alert-488703"
+                  project_name = "gold-price-alert"
+                  region       = "asia-southeast2"
+                  environment  = "dev"
+                  TFEOF
+                  echo "✓ terraform.tfvars created"
+
+            - name: Terraform Format Check
+              run: terraform -chdir=terraform fmt -check -recursive
+
+            - name: Terraform Init
+              run: terraform -chdir=terraform init
+
+            - name: Terraform Validate
+              run: terraform -chdir=terraform validate
+
+            - name: Terraform Plan
+              run: terraform -chdir=terraform plan -out=tfplan
+
+            - name: Terraform Apply
+              if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
+              run: terraform -chdir=terraform apply -auto-approve tfplan
