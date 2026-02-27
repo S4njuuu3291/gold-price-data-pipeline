@@ -51,13 +51,13 @@ output "scheduler_service_account_email" {
 output "deployment_info" {
   description = "Summary of the Cloud Functions Gen 2 deployment"
   value = {
-    project_id           = var.project_id
-    region               = var.region
-    publisher_function   = google_cloudfunctions2_function.publisher_function.name
-    subscriber_function  = google_cloudfunctions2_function.subscriber_function.name
-    publisher_url        = google_cloudfunctions2_function.publisher_function.service_config[0].uri
-    subscriber_trigger   = "Pub/Sub via Eventarc"
-    scheduler_trigger    = "Every 15 minutes (Asia/Jakarta)"
-    cloud_functions_gen  = "Gen 2"
+    project_id          = var.project_id
+    region              = var.region
+    publisher_function  = google_cloudfunctions2_function.publisher_function.name
+    subscriber_function = google_cloudfunctions2_function.subscriber_function.name
+    publisher_url       = google_cloudfunctions2_function.publisher_function.service_config[0].uri
+    subscriber_trigger  = "Pub/Sub via Eventarc"
+    scheduler_trigger   = "Every 15 minutes (Asia/Jakarta)"
+    cloud_functions_gen = "Gen 2"
   }
 }

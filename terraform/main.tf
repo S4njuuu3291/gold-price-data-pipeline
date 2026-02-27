@@ -167,7 +167,7 @@ resource "google_cloudfunctions2_function" "publisher_function" {
   build_config {
     runtime     = "python313"
     entry_point = "publish_gold_price"
-    
+
     source {
       storage_source {
         bucket = google_storage_bucket.gcf_source_bucket.name
@@ -179,16 +179,16 @@ resource "google_cloudfunctions2_function" "publisher_function" {
   }
 
   service_config {
-    max_instance_count              = 100
-    timeout_seconds                 = 60
+    max_instance_count               = 100
+    timeout_seconds                  = 60
     max_instance_request_concurrency = 100
-    min_instance_count              = 0
-    
+    min_instance_count               = 0
+
     environment_variables = {
       PROJECT_ID = var.project_id
       TOPIC_ID   = google_pubsub_topic.gold_price_topic.name
     }
-    
+
     service_account_email = google_service_account.gcf-sa.email
     ingress_settings      = "ALLOW_ALL"
   }
@@ -238,7 +238,7 @@ resource "google_cloudfunctions2_function" "subscriber_function" {
   build_config {
     runtime     = "python313"
     entry_point = "receive_gold_price"
-    
+
     source {
       storage_source {
         bucket = google_storage_bucket.gcf_source_bucket.name
@@ -250,15 +250,15 @@ resource "google_cloudfunctions2_function" "subscriber_function" {
   }
 
   service_config {
-    max_instance_count              = 100
-    timeout_seconds                 = 60
+    max_instance_count               = 100
+    timeout_seconds                  = 60
     max_instance_request_concurrency = 100
-    min_instance_count              = 0
-    
+    min_instance_count               = 0
+
     environment_variables = {
       PROJECT_ID = var.project_id
     }
-    
+
     service_account_email = google_service_account.gcf-sa.email
     ingress_settings      = "ALLOW_INTERNAL_AND_GCLOUD"
   }
