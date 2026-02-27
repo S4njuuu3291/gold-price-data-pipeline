@@ -295,13 +295,27 @@ resource "google_service_account" "scheduler_sa" {
   display_name = "Service Account for Cloud Scheduler"
 }
 
-# IAM: Grant Cloud Functions Invoker role to Cloud Scheduler
+# IAM: Grant Cloud Functions Invoker role to Cloud Scheduler (Gen 2 requires Run Invoker)
 resource "google_project_iam_member" "scheduler_invoke_cf" {
   project = var.project_id
   role    = "roles/cloudfunctions.invoker"
   member  = "serviceAccount:${google_service_account.scheduler_sa.email}"
 
   depends_on = [google_service_account.scheduler_sa]
+}
+
+# IAM: Grant Cloud Run Invoker role to Cloud Scheduler (required for Gen 2 functions)
+resource "google_cloud_run_v2_service_iam_member" "scheduler_run_invoker" {
+  project  = var.project_id
+  location = var.region
+  name     = google_cloudfunctions2_function.publisher_function.name
+  role     = "roles/run.invoker"
+  member   = "serviceAccount:${google_service_account.scheduler_sa.email}"
+
+  depends_on = [
+    google_cloudfunctions2_function.publisher_function,
+    google_service_account.scheduler_sa
+  ]
 }
 
 # Cloud Scheduler Job: Trigger Publisher every 15 minutes
