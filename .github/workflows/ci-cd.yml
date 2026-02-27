@@ -3,16 +3,77 @@ name: CI/CD Pipeline for Gold Price Data Pipeline
 on:
     push:
         branches: [dev, "setup/**", "feature/**"]
+        paths:
+            - "terraform/**"
+            - ".github/workflows/ci-cd.yml"
+            - "src/**"
+            - "test/**"
+            - "pyproject.toml"
+            - "poetry.lock"
     pull_request:
         branches:
             - main
     workflow_dispatch:
 
+env:
+    PYTHON_VERSION: "3.13"
+    POETRY_VERSION: "1.8.0"
+
 jobs:
+    test:
+        name: Unit Tests
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout Repository
+              uses: actions/checkout@v3
+
+            - name: Set up Python
+              uses: actions/setup-python@v4
+              with:
+                  python-version: ${{ env.PYTHON_VERSION }}
+
+            - name: Install Poetry
+              uses: snok/install-poetry@v1
+              with:
+                  version: ${{ env.POETRY_VERSION }}
+                  virtualenvs-create: true
+                  virtualenvs-in-project: true
+
+            - name: Cache Poetry dependencies
+              uses: actions/cache@v3
+              with:
+                  path: .venv
+                  key: venv-${{ runner.os }}-${{ hashFiles('**/poetry.lock') }}
+                  restore-keys: |
+                      venv-${{ runner.os }}-
+
+            - name: Install dependencies
+              run: poetry install --no-root
+
+            - name: Run pytest
+              run: poetry run pytest test/ -v --tb=short --junit-xml=test-results.xml
+
+            - name: Upload Test Results
+              if: always()
+              uses: actions/upload-artifact@v3
+              with:
+                  name: test-results
+                  path: test-results.xml
+
+            - name: Test Summary
+              if: always()
+              run: |
+                  if [ $? -eq 0 ]; then
+                    echo "✅ All tests passed!"
+                  else
+                    echo "❌ Some tests failed"
+                  fi
+
     terraform_infra:
         name: Terraform Infrastructure Deployment
         runs-on: ubuntu-latest
         environment: dev
+        needs: test
         steps:
             - name: Checkout Repository
               uses: actions/checkout@v3
@@ -43,16 +104,42 @@ jobs:
                   echo "✓ terraform.tfvars created"
 
             - name: Terraform Format Check
-              run: terraform -chdir=terraform fmt -check -recursive
+              working-directory: terraform
+              run: terraform fmt -check -recursive
 
             - name: Terraform Init
-              run: terraform -chdir=terraform init
+              working-directory: terraform
+              run: terraform init
 
             - name: Terraform Validate
-              run: terraform -chdir=terraform validate
+              working-directory: terraform
+              run: terraform validate
 
             - name: Terraform Plan
-              run: terraform -chdir=terraform plan -out=tfplan
+              working-directory: terraform
+              run: terraform plan -out=tfplan
+
+            - name: Upload Terraform Plan
+              uses: actions/upload-artifact@v3
+              with:
+                  name: terraform-plan
+                  path: terraform/tfplan
 
             - name: Terraform Apply
-              run: terraform -chdir=terraform apply -auto-approve tfplan
+              working-directory: terraform
+              run: terraform apply -auto-approve tfplan
+
+            - name: Terraform Output
+              working-directory: terraform
+              run: |
+                  echo "## Terraform Deployment Summary" >> $GITHUB_STEP_SUMMARY
+                  echo "" >> $GITHUB_STEP_SUMMARY
+                  echo "### Created Resources:" >> $GITHUB_STEP_SUMMARY
+                  terraform output -json | jq -r 'to_entries[] | "- \(.key): \(.value.value)"' >> $GITHUB_STEP_SUMMARY
+
+            - name: Deployment Notification
+              if: success()
+              run: |
+                  echo "✅ Infrastructure deployment completed successfully!"
+                  echo "Cloud Scheduler is now running every 15 minutes"
+                  echo "Check Cloud Logging for execution details"
