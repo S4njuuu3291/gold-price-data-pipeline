@@ -1,10 +1,18 @@
 import json
 import logging
+import os
 from typing import Any, Tuple, Dict, Optional
 from datetime import datetime, timezone
-from src.publisher.fetcher import fetch_gold_price
-from src.publisher.publisher import publish_to_pubsub
-from src.utils import PROJECT_ID, TOPIC_ID
+
+try:
+    from fetcher import fetch_gold_price
+    from publisher import publish_to_pubsub
+except ImportError:
+    from src.publisher.fetcher import fetch_gold_price
+    from src.publisher.publisher import publish_to_pubsub
+
+PROJECT_ID = os.environ.get("PROJECT_ID", "")
+TOPIC_ID = os.environ.get("TOPIC_ID", "")
 
 # Configure structured logging
 logging.basicConfig(

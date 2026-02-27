@@ -1,6 +1,5 @@
 import logging
 import google.cloud.pubsub_v1 as pubsub
-from src.utils import PROJECT_ID, TOPIC_ID
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

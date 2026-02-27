@@ -1,4 +1,5 @@
 import logging
+import os
 import requests
 from datetime import datetime, timedelta
 from pydantic import BaseModel, Field, field_validator, ConfigDict
@@ -8,7 +9,13 @@ from tenacity import (
     wait_exponential,
     retry_if_exception_type
 )
-from src.utils import get_secret_value, PROJECT_ID
+
+try:
+    from utils import get_secret_value
+except ImportError:
+    from src.utils import get_secret_value
+
+PROJECT_ID = os.environ.get("PROJECT_ID", "")
 
 logger = logging.getLogger(__name__)
 
